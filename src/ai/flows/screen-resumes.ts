@@ -1,3 +1,4 @@
+
 // 'use server'
 'use server';
 
@@ -11,14 +12,15 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { screeningCriteriaSchema } from '@/lib/types'; // Import the centralized schema
 
-const ScreeningCriteriaSchema = z.object({
-  keywords: z.string().describe('Keywords to search for in the resume.'),
-  experienceLevel: z
-    .string()
-    .describe('Minimum experience level required (e.g., entry, mid, senior).'),
-  skills: z.string().describe('Specific skills required for the job.'),
-});
+// const ScreeningCriteriaSchema = z.object({ // Remove local definition
+//   keywords: z.string().describe('Keywords to search for in the resume.'),
+//   experienceLevel: z
+//     .string()
+//     .describe('Minimum experience level required (e.g., entry, mid, senior).'),
+//   skills: z.string().describe('Specific skills required for the job.'),
+// });
 
 const ResumeSchema = z.object({
   filename: z.string().describe('Name of the uploaded file'),
@@ -30,7 +32,7 @@ const ResumeSchema = z.object({
 });
 
 const ScreenResumesInputSchema = z.object({
-  screeningCriteria: ScreeningCriteriaSchema.describe(
+  screeningCriteria: screeningCriteriaSchema.describe( // Use imported schema
     'Criteria to use for screening resumes.'
   ),
   resumes: z.array(ResumeSchema).describe('Array of resumes to screen.'),
@@ -84,3 +86,4 @@ const screenResumesFlow = ai.defineFlow(
     return output!;
   }
 );
+

@@ -4,7 +4,6 @@
 import type { Control } from "react-hook-form";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -24,16 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ScreeningCriteria } from "@/lib/types";
-import { experienceLevels } from "@/lib/types";
+import { experienceLevels, screeningCriteriaSchema } from "@/lib/types"; // Import schema from lib/types
 import type { ExperienceLevel } from "@/lib/types";
 
-export const screeningCriteriaSchema = z.object({
-  keywords: z.string().min(1, "Keywords are required."),
-  experienceLevel: z.enum(experienceLevels, {
-    required_error: "Experience level is required.",
-  }),
-  skills: z.string().min(1, "Skills are required."),
-});
 
 type CriteriaFormProps = {
   onSubmit: (data: ScreeningCriteria) => void;
@@ -126,3 +118,4 @@ export function CriteriaForm({ onSubmit, isLoading, initialData }: CriteriaFormP
 // Export Control type for use in parent component if needed for external submit
 export type CriteriaFormControl = Control<ScreeningCriteria>;
 export { useForm as useCriteriaForm };
+export { screeningCriteriaSchema }; // Re-export if needed by other client components, or remove if not.
