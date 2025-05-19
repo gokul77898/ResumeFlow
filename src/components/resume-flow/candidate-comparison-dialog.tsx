@@ -94,7 +94,7 @@ export function CandidateComparisonDialog({
                        <ShadCnCardDescription>
                         Overall Fit: <Badge variant={
                             detail.overallFit === "Excellent" ? "default" :
-                            detail.overallFit === "Good" ? "secondary" : // Assuming secondary is a positive-ish color
+                            detail.overallFit === "Good" ? "accent" :
                             detail.overallFit === "Fair" ? "outline" : "destructive"
                         }>{detail.overallFit}</Badge>
                       </ShadCnCardDescription>

@@ -10,7 +10,7 @@ import {
   handleGenerateInterviewQuestions,
   handleCompareCandidates
 } from "@/app/actions";
-import { CriteriaForm, useCriteriaForm } from "@/components/resume-flow/criteria-form"; // Remove screeningCriteriaSchema import from here
+import { CriteriaForm, useCriteriaForm } from "@/components/resume-flow/criteria-form";
 import { ResumeUploader } from "@/components/resume-flow/resume-uploader";
 import { ResultsTable } from "@/components/resume-flow/results-table";
 import { ResumeSummaryDialog } from "@/components/resume-flow/resume-summary-dialog";
@@ -35,7 +35,7 @@ import type {
   InterviewQuestionsData,
   CandidateComparisonData,
 } from "@/lib/types";
-import { screeningCriteriaSchema } from "@/lib/types"; // Import schema from lib/types for zodResolver
+import { screeningCriteriaSchema } from "@/lib/types";
 import { Briefcase, Loader2, ListFilter, FileUp, CheckCircle, FileText, BookOpenCheck, Save, UsersRound, Lightbulb, MessagesSquare } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { SubmitHandler } from "react-hook-form";
@@ -45,9 +45,10 @@ const SAVED_TEMPLATES_KEY = "resumeFlow_savedCriteriaTemplates";
 export default function ResumeFlowPage() {
   const { toast } = useToast();
   
+  const defaultCriteria: ScreeningCriteria = { keywords: "", experienceLevel: "Entry-level", skills: "" };
   const criteriaForm = useCriteriaForm<ScreeningCriteria>({
-    resolver: zodResolver(screeningCriteriaSchema), // Use imported schema
-    defaultValues: { keywords: "", experienceLevel: "Entry-level", skills: "" },
+    resolver: zodResolver(screeningCriteriaSchema),
+    defaultValues: defaultCriteria,
   });
 
   const [uploadedResumes, setUploadedResumes] = useState<UploadedResume[]>([]);
@@ -60,7 +61,6 @@ export default function ResumeFlowPage() {
   const [isLoadingScreening, setIsLoadingScreening] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
-  // New Features State
   const [isJobParserDialogOpen, setIsJobParserDialogOpen] = useState(false);
   const [isLoadingJobParser, setIsLoadingJobParser] = useState(false);
   
@@ -86,8 +86,15 @@ export default function ResumeFlowPage() {
   const [isLoadingCandidateComparison, setIsLoadingCandidateComparison] = useState(false);
   const [candidateComparisonError, setCandidateComparisonError] = useState<string | null>(null);
 
+  const [jobContextForAnalysis, setJobContextForAnalysis] = useState<string>(() => {
+    if (defaultCriteria.skills && defaultCriteria.keywords) {
+      return `${defaultCriteria.skills}, ${defaultCriteria.keywords}`;
+    }
+    return defaultCriteria.skills || defaultCriteria.keywords || "";
+  });
 
-  useEffect(() => { // Load saved templates from localStorage
+
+  useEffect(() => {
     const storedTemplates = localStorage.getItem(SAVED_TEMPLATES_KEY);
     if (storedTemplates) {
       setSavedTemplates(JSON.parse(storedTemplates));
@@ -105,7 +112,10 @@ export default function ResumeFlowPage() {
     }
     setIsLoadingScreening(true);
     setScreeningResults([]);
-    setSelectedCandidateIdsForComparison(new Set()); // Clear selections on new screen
+    setSelectedCandidateIdsForComparison(new Set()); 
+
+    const { skills, keywords } = criteria;
+    setJobContextForAnalysis(skills && keywords ? `${skills}, ${keywords}` : skills || keywords || "");
 
     const resumesForApi = uploadedResumes.map(r => ({ filename: r.filename, dataUri: r.dataUri }));
     try {
@@ -123,19 +133,18 @@ export default function ResumeFlowPage() {
     }
   };
   
-  // Job Description Parser
   const handleParseJobDescriptionSubmit = async (jobDescriptionText: string) => {
     setIsLoadingJobParser(true);
     try {
       const parsedCriteria = await handleParseJobDescription({ jobDescriptionText });
       criteriaForm.reset({
         keywords: parsedCriteria.keywords,
-        // Ensure experienceLevel is one of the valid enum values, default if not.
         experienceLevel: screeningCriteriaSchema.shape.experienceLevel.safeParse(parsedCriteria.experienceLevel).success 
             ? parsedCriteria.experienceLevel as ExperienceLevel
             : "Entry-level",
         skills: parsedCriteria.skills,
       });
+      setJobContextForAnalysis(jobDescriptionText); // Use full JD text for context
       toast({ title: "Job Description Parsed", description: "Screening criteria have been pre-filled.", variant: "default" });
       setIsJobParserDialogOpen(false);
     } catch (error) {
@@ -145,7 +154,6 @@ export default function ResumeFlowPage() {
     }
   };
 
-  // Saved Templates
   const handleSaveTemplate = (templateName: string) => {
     const currentCriteria = criteriaForm.getValues();
     const newTemplate: SavedScreeningTemplate = { id: Date.now().toString(), name: templateName, criteria: currentCriteria };
@@ -160,6 +168,8 @@ export default function ResumeFlowPage() {
     const templateToLoad = savedTemplates.find(t => t.id === templateId);
     if (templateToLoad) {
       criteriaForm.reset(templateToLoad.criteria);
+      const { skills, keywords } = templateToLoad.criteria;
+      setJobContextForAnalysis(skills && keywords ? `${skills}, ${keywords}` : skills || keywords || "");
       toast({ title: "Template Loaded", description: `Criteria "${templateToLoad.name}" applied.`, variant: "default" });
       setIsLoadTemplateDialogOpen(false);
     }
@@ -172,20 +182,18 @@ export default function ResumeFlowPage() {
     toast({ title: "Template Deleted", variant: "default" });
   };
 
-
-  // Resume Summary (existing)
   const handleOpenSummaryDialog = (result: EnrichedScreeningResult) => {
     setSelectedResumeForSummary(result);
     setSummaryResult(null);
     setSummaryError(null);
     setIsSummaryDialogOpen(true);
   };
-  const handleGenerateSummary = async (jobDescription: string) => {
+  const handleGenerateSummary = async (jobDescriptionForSummary: string) => { // Note: this specific JD is for summary only
     if (!selectedResumeForSummary || !selectedResumeForSummary.resumeTextContent) return;
     setIsLoadingSummary(true);
     setSummaryResult(null); setSummaryError(null);
     try {
-      const summary = await handleSummarizeResume({ resumeText: selectedResumeForSummary.resumeTextContent, jobDescription });
+      const summary = await handleSummarizeResume({ resumeText: selectedResumeForSummary.resumeTextContent, jobDescription: jobDescriptionForSummary });
       setSummaryResult(summary);
       toast({ title: "Summary Generated", variant: "default" });
     } catch (error) {
@@ -196,7 +204,6 @@ export default function ResumeFlowPage() {
     }
   };
 
-  // Skill Gap Analysis
   const handleOpenSkillGapDialog = (result: EnrichedScreeningResult) => {
     setSelectedResumeForAnalysis(result);
     setSkillGapData(null);
@@ -205,16 +212,15 @@ export default function ResumeFlowPage() {
   };
   const handleGenerateSkillGap = async () => {
     if (!selectedResumeForAnalysis || !selectedResumeForAnalysis.resumeTextContent) return;
-    const jobDescription = criteriaForm.getValues().skills + ", " + criteriaForm.getValues().keywords; // Or a dedicated JD field
-    if (!jobDescription.trim()) {
-        toast({ title: "Missing Context", description: "Please ensure screening criteria (especially skills/keywords for job context) are filled.", variant: "destructive"});
-        setSkillGapError("Job context from criteria (skills/keywords) is missing.");
+    if (!jobContextForAnalysis.trim()) {
+        toast({ title: "Missing Job Context", description: "Please define screening criteria or parse a job description first.", variant: "destructive"});
+        setSkillGapError("Job context is missing. Please ensure criteria are set or a job description is parsed.");
         return;
     }
     setIsLoadingSkillGap(true);
     setSkillGapData(null); setSkillGapError(null);
     try {
-      const analysis = await handleSkillGapAnalysis({ resumeText: selectedResumeForAnalysis.resumeTextContent, jobDescription });
+      const analysis = await handleSkillGapAnalysis({ resumeText: selectedResumeForAnalysis.resumeTextContent, jobDescription: jobContextForAnalysis });
       setSkillGapData(analysis);
       toast({ title: "Skill Gap Analysis Complete", variant: "default" });
     } catch (error) {
@@ -225,7 +231,6 @@ export default function ResumeFlowPage() {
     }
   };
   
-  // Interview Questions
   const handleOpenInterviewQuestionsDialog = (result: EnrichedScreeningResult) => {
     setSelectedResumeForAnalysis(result);
     setInterviewQuestionsData(null);
@@ -234,16 +239,15 @@ export default function ResumeFlowPage() {
   };
   const handleGenerateInterviewQuestionsAction = async () => {
     if (!selectedResumeForAnalysis || !selectedResumeForAnalysis.resumeTextContent) return;
-    const jobDescription = criteriaForm.getValues().skills + ", " + criteriaForm.getValues().keywords;
-     if (!jobDescription.trim()) {
-        toast({ title: "Missing Context", description: "Please ensure screening criteria (especially skills/keywords for job context) are filled.", variant: "destructive"});
-        setInterviewQuestionsError("Job context from criteria (skills/keywords) is missing.");
+     if (!jobContextForAnalysis.trim()) {
+        toast({ title: "Missing Job Context", description: "Please define screening criteria or parse a job description first.", variant: "destructive"});
+        setInterviewQuestionsError("Job context is missing. Please ensure criteria are set or a job description is parsed.");
         return;
     }
     setIsLoadingInterviewQuestions(true);
     setInterviewQuestionsData(null); setInterviewQuestionsError(null);
     try {
-      const questions = await handleGenerateInterviewQuestions({ resumeText: selectedResumeForAnalysis.resumeTextContent, jobDescription });
+      const questions = await handleGenerateInterviewQuestions({ resumeText: selectedResumeForAnalysis.resumeTextContent, jobDescription: jobContextForAnalysis });
       setInterviewQuestionsData(questions);
       toast({ title: "Interview Questions Generated", variant: "default" });
     } catch (error) {
@@ -254,7 +258,6 @@ export default function ResumeFlowPage() {
     }
   };
 
-  // Candidate Comparison
   const handleResultsSelectionChange = (id: string, checked: boolean) => {
     const newSet = new Set(selectedCandidateIdsForComparison);
     if (checked) newSet.add(id);
@@ -273,10 +276,9 @@ export default function ResumeFlowPage() {
   };
 
   const handleGenerateCandidateComparison = async () => {
-    const jobDescription = criteriaForm.getValues().skills + ", " + criteriaForm.getValues().keywords;
-     if (!jobDescription.trim()) {
-        toast({ title: "Missing Context", description: "Please ensure screening criteria (especially skills/keywords for job context) are filled for comparison.", variant: "destructive"});
-        setCandidateComparisonError("Job context from criteria (skills/keywords) is missing.");
+     if (!jobContextForAnalysis.trim()) {
+        toast({ title: "Missing Job Context", description: "Please define screening criteria or parse a job description first for comparison.", variant: "destructive"});
+        setCandidateComparisonError("Job context is missing. Please ensure criteria are set or a job description is parsed.");
         return;
     }
     const candidatesToCompare = screeningResults
@@ -292,7 +294,7 @@ export default function ResumeFlowPage() {
     setIsLoadingCandidateComparison(true);
     setCandidateComparisonData(null); setCandidateComparisonError(null);
     try {
-      const comparison = await handleCompareCandidates({ candidates: candidatesToCompare, jobDescription });
+      const comparison = await handleCompareCandidates({ candidates: candidatesToCompare, jobDescription: jobContextForAnalysis });
       setCandidateComparisonData(comparison);
       toast({ title: "Candidate Comparison Complete", variant: "default" });
     } catch (error) {
@@ -334,7 +336,7 @@ export default function ResumeFlowPage() {
                     <Button variant="outline" size="sm" onClick={() => setIsJobParserDialogOpen(true)}>
                         <FileText className="mr-2 h-4 w-4" /> Parse JD
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setIsSaveTemplateDialogOpen(true)} disabled={!criteriaForm.formState.isDirty && !Object.values(criteriaForm.getValues()).some(v => v !== "")}>
+                    <Button variant="outline" size="sm" onClick={() => setIsSaveTemplateDialogOpen(true)} disabled={!criteriaForm.formState.isDirty && !Object.values(criteriaForm.getValues()).some(v => v !== "" && v !== defaultCriteria.experienceLevel)}>
                         <Save className="mr-2 h-4 w-4" /> Save Criteria
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => setIsLoadTemplateDialogOpen(true)} disabled={savedTemplates.length === 0}>
@@ -492,4 +494,3 @@ export default function ResumeFlowPage() {
     </>
   );
 }
-
